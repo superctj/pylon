@@ -79,7 +79,7 @@ class PylonTabertTransformer:
         """
 
         tbl_input = self._input_formatter.generate_instance_input(table)
-        tbl_tensor_dict = self._input_formatter.collate([tbl_input], row_num=self._num_samples)
+        tbl_tensor_dict = self._input_formatter.collate([tbl_input])
 
         # Get projected embeddings
         _, embeddings = self._embedding_model.inference(tbl_tensor_dict)
