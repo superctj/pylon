@@ -13,8 +13,8 @@ from util_common.logging import create_new_directory, custom_logger, log_args_an
 
 
 def create_or_load_index(dataloader: PylonCSVDataLoader, args: argparse.Namespace) -> PylonTabertEmbeddingIndex:
-    model_name = args.model_path.split("/")[-1][:-5]
-    index_name = f"{model_name}_sample_{args.num_samples}_lsh_{args.lsh_threshold}"
+    ckpt_name = args.ckpt_path.split("/")[-1][:-5]
+    index_name = f"{ckpt_name}_sample_{args.num_samples}_lsh_{args.lsh_threshold}"
     index_path = os.path.join(args.index_dir, f"{index_name}.lsh")
 
     if os.path.exists(index_path):
@@ -24,7 +24,7 @@ def create_or_load_index(dataloader: PylonCSVDataLoader, args: argparse.Namespac
         print(f"{index_name} Embedding Index: STARTED!")
         
         embedding_index = PylonTabertEmbeddingIndex(
-            ckpt_path=args.model_path,
+            ckpt_path=args.ckpt_path,
             dataloader=dataloader,
             embedding_dim=args.embedding_dim,
             num_samples=args.num_samples,
@@ -74,7 +74,7 @@ if __name__ == "__main__":
     parser.add_argument("--index_dir", type=str, default="", help="")
     parser.add_argument("--output_dir", type=str, default="", help="")
     # Embedding model specification
-    parser.add_argument("--model_path", type=str, default="", help="")
+    parser.add_argument("--ckpt_path", type=str, default="", help="")
     parser.add_argument("--embedding_dim", type=int, default=128, help="")
     parser.add_argument("--num_samples", type=int, default=-1, help="Maximum number of rows to sample from each table to construct embeddings.")
     # LSH specification

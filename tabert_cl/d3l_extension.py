@@ -13,7 +13,11 @@ from tqdm import tqdm
 from transformers import BertTokenizer
 
 from tabert_cl_training.input_prep import InputFormatter
-from util import load_pylon_tabert_model
+from tabert_cl_training.train_model import TableEmbeddingModule
+
+
+def load_pylon_tabert_model(ckpt_path: str):
+    return TableEmbeddingModule.load_from_checkpoint(ckpt_path).model
 
 
 class PylonTabertTransformer:

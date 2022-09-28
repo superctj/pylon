@@ -42,7 +42,7 @@ class InputFormatter(object):
     def _sample_rows(self, table: pd.DataFrame, num_rows: int) -> pd.DataFrame:
         return table.sample(n=num_rows) if table.shape[0] > num_rows else table
     
-    def _tokenize_table(self, table: pd.DataFrame) -> Tuple(List[str], Tuple(Dict, List[Dict])):
+    def _tokenize_table(self, table: pd.DataFrame) -> Tuple[List[str], Tuple[Dict, List[Dict]]]:
         # Tokenize table header
         tokenized_header = {}
         header = list(table.columns) # col_dtypes = dict(table.dtypes)
@@ -65,7 +65,7 @@ class InputFormatter(object):
         # pprint(tokenized_data)
         return header, (tokenized_header, tokenized_data)
     
-    def _get_table_input(self, header: List[str], tokenized_table: Tuple(Dict, List[Dict])) -> List[Dict]:
+    def _get_table_input(self, header: List[str], tokenized_table: Tuple[Dict, List[Dict]]) -> List[Dict]:
         tokenized_header, tokenized_data = tokenized_table
         # pprint(header)
         # print("Number of columns: ", len(header))
@@ -160,7 +160,7 @@ class InputFormatter(object):
         row_instance["cell_token_col_ids"] = cell_token_col_ids
         return row_instance
 
-    def _get_cell_input(self, col_name_tokens: List[str], cell_tokens: List[str], cell_start_idx: int) -> Tuple(List[str], Dict):
+    def _get_cell_input(self, col_name_tokens: List[str], cell_tokens: List[str], cell_start_idx: int) -> Tuple[List[str], Dict]:
         cell_input = []
         span_map = {}
 

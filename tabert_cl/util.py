@@ -5,14 +5,9 @@ from typing import Tuple
 from d3l_extension import QueryEngine
 from tqdm import tqdm
 
-from tabert_cl_training.train_model import TableEmbeddingModule
 from util_common.data_loader import CSVDataLoader
 from util_common.logging import custom_logger, log_query_and_ground_truth
 from util_common.query import aggregate_func, eval_search_results
-
-
-def load_pylon_tabert_model(ckpt_path: str):
-    return TableEmbeddingModule.load_from_checkpoint(ckpt_path).model
 
 
 def topk_search_and_eval(query_engine: QueryEngine, dataloader: CSVDataLoader, output_dir: str, k: int) -> Tuple[float]:
