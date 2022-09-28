@@ -1,16 +1,18 @@
+import os
+
 from typing import Dict, List, Tuple
+
 import numpy as np
 import pandas as pd
 import torch
 
-from pprint import pprint
-from torch.utils.data import Dataset, DataLoader
+from torch.utils.data import Dataset
 from transformers import BertTokenizer
 
 
 MAX_BERT_INPUT_LENGTH = 512
-MAX_CELL_LEN = 20
-CELL_FORMAT = ["column", "|", "value"]
+MAX_CELL_LEN = 30
+CELL_FORMAT = ["value"]
 COL_DELIMITER = "[SEP]"
 TRIM_LONG_TABLE = True
 
@@ -42,18 +44,11 @@ class InputFormatter(object):
     def _sample_rows(self, table: pd.DataFrame, num_rows: int) -> pd.DataFrame:
         return table.sample(n=num_rows) if table.shape[0] > num_rows else table
     
-    def _tokenize_table(self, table: pd.DataFrame) -> Tuple[List[str], Tuple[Dict, List[Dict]]]:
-        # Tokenize table header
-        tokenized_header = {}
-        header = list(table.columns) # col_dtypes = dict(table.dtypes)
-        
-        for col_name in header:
-            tokenized_header[col_name] = {}
-            tokenized_header[col_name]["tokens"] = self.tokenizer.tokenize(col_name.lower())
-            # tokenized_header[col_name]["dtype"] = dtype_conversion(col_dtypes[col_name])
-
-        # Tokenize table rows
+    def _tokenize_table(self, table: pd.DataFrame) -> Tuple[List[str], List[Dict]]:
+        # tokenize rows
+        header = list(table.columns)
         tokenized_data = []
+
         for i in range(table.shape[0]):
             tokenized_row = {}
             for col_name in header:
@@ -63,34 +58,38 @@ class InputFormatter(object):
         # pprint(header)
         # pprint(tokenized_header)
         # pprint(tokenized_data)
-        return header, (tokenized_header, tokenized_data)
+        # return header, (tokenized_header, tokenized_data)
+        return header, tokenized_data
     
-    def _get_table_input(self, header: List[str], tokenized_table: Tuple[Dict, List[Dict]]) -> List[Dict]:
-        tokenized_header, tokenized_data = tokenized_table
+    def _get_table_input(self, header: List[str], tokenized_data: Tuple[Dict, List[Dict]]) -> List[Dict]:
         # pprint(header)
         # print("Number of columns: ", len(header))
-        # pprint(tokenized_header)
         # pprint(tokenized_data)
-
         table_input = []
         for row_data in tokenized_data:
-            row_input = self._get_row_input(row_data, header, tokenized_header)
+            row_input = self._get_row_input(row_data, header)
             table_input.append(row_input)
 
         return table_input
     
-    def _get_row_input(self, row: Dict, header: List[str], tokenized_header: Dict) -> Dict:
+    def _get_row_input(self, row: Dict, header: List[str]) -> Dict:
         # Account for [CLS] token at the beginning and [SEP] token at the end
         row_token_max_len = MAX_BERT_INPUT_LENGTH - 2
         row_input_tokens = []
         row_token_span_map = []
         cell_start_idx = 1 # Account for [CLS] at the beginning
 
-        for col_name in header:
+        for i, col_name in enumerate(header):
+            if i >= 20: break # Consider at most 20 columns
+
             value_tokens = row[col_name]
+            # if len(value_tokens) == 0:
+            #     print(header)
+            #     print(row)
+            #     raise ValueError("Empty cell!")
             value_tokens = value_tokens[:MAX_CELL_LEN] # Truncate long cells
 
-            cell_input_tokens, cell_span_map = self._get_cell_input(tokenized_header[col_name]["tokens"], value_tokens, cell_start_idx)
+            cell_input_tokens, cell_span_map = self._get_cell_input(value_tokens, cell_start_idx)
             cell_input_tokens.append(COL_DELIMITER)
 
             early_stop = False
@@ -148,8 +147,8 @@ class InputFormatter(object):
             "cell_spans": row_token_span_map
         }
 
-        # Specify to which column a cell token belongs
         row_input_token_len = len(row_input_tokens)
+        # Specify to which column a cell token belongs
         cell_token_col_ids = [np.iinfo(np.uint16).max] * row_input_token_len
 
         for col_id, col_name in enumerate(header):
@@ -160,39 +159,26 @@ class InputFormatter(object):
         row_instance["cell_token_col_ids"] = cell_token_col_ids
         return row_instance
 
-    def _get_cell_input(self, col_name_tokens: List[str], cell_tokens: List[str], cell_start_idx: int) -> Tuple[List[str], Dict]:
-        cell_input = []
-        span_map = {}
-
-        for elem in CELL_FORMAT:
-            token_start_idx = len(cell_input) + cell_start_idx
-            if elem == "column":
-                span_map["column name"] = (token_start_idx, token_start_idx + len(col_name_tokens))
-                cell_input.extend(col_name_tokens)
-            elif elem == "value":
-                span_map["value"] = (token_start_idx, token_start_idx + len(cell_tokens))
-                cell_input.extend(cell_tokens)
-            # elif elem == "type":
-            #     span_map["type"] = (token_start_idx,
-            #                         token_start_idx + 1)
-            #     cell_input.append(col_dtype)
-            else:
-                span_map.setdefault("delimiter", []).append(token_start_idx)
-                cell_input.append(elem)
+    def _get_cell_input(self, cell_tokens: List[str], cell_start_idx: int) -> Tuple[List[str], Dict]:
+        # The orginal cell could be a string containing only whitespace
+        if len(cell_tokens) == 0:
+            cell_tokens.append("-")
         
-        span_map["whole_span"] = (cell_start_idx, cell_start_idx + len(cell_input))
+        span_map = {}
+        span_map["value"] = (cell_start_idx, cell_start_idx + len(cell_tokens))
+        span_map["whole_span"] = (cell_start_idx, cell_start_idx + len(cell_tokens))
 
-        return cell_input, span_map
+        return cell_tokens, span_map
     
     def generate_instance_input(self, table: pd.DataFrame) -> List[Dict]:
-        table = table.select_dtypes(include="object")
-        table = table.dropna(axis="columns", how="all") # Drop empty columns
-        table = table.dropna(axis="index", how="any") # Drop rows with missing values; use "all" for tus benchmark
-        # table = table.dropna(axis="index", how="all") # drop rows with missing values
-        if table.shape[1] < 1:
-            print(f"Table has no column left...")
-        if table.shape[0] < 3:
-            print(f"Table has fewer than 3 rows...")
+        # table = table.select_dtypes(include="object")
+        # table = table.dropna(axis="columns", how="all") # Drop empty columns
+        # table = table.dropna(axis="index", how="any") # Drop rows with missing values; use "all" for tus benchmark
+        # # table = table.dropna(axis="index", how="all") # drop rows with missing values
+        # if table.shape[1] < 1:
+        #     print(f"Table has no column left...")
+        # if table.shape[0] < 3:
+        #     print(f"Table has fewer than 3 rows...")
         
         t_sample = self._sample_rows(table, self.num_rows)
         t_header, t_tokenized = self._tokenize_table(t_sample)
@@ -202,22 +188,23 @@ class InputFormatter(object):
     
     def collate(self, tables: List[List]) -> Dict:
         batch_size = len(tables)
-        if batch_size == 1: # for inference
-            num_rows = min(self.num_rows, len(tables[0]))
-
         max_seq_len = 0
+
+        if batch_size == 1: # for inference
+            row_num = min(self.num_rows, len(tables[0]))
+
         for tbl in tables:
             local_max = max(len(row["token_ids"]) for row in tbl)
             max_seq_len = max(max_seq_len, local_max)
 
-        t_input_ids = np.zeros((batch_size, num_rows, max_seq_len), dtype=np.int64)
-        t_seq_mask = np.zeros((batch_size, num_rows, max_seq_len), dtype=np.float32)
-        t_segment_ids = np.zeros((batch_size, num_rows, max_seq_len), dtype=np.int64)
+        t_input_ids = np.zeros((batch_size, row_num, max_seq_len), dtype=np.int64)
+        t_seq_mask = np.zeros((batch_size, row_num, max_seq_len), dtype=np.float32)
+        t_segment_ids = np.zeros((batch_size, row_num, max_seq_len), dtype=np.int64)
         t_row_col_nums = []
 
-        # Initialize the mapping with the id of last column as the "garbage collection" entry for reduce ops
+        # we initialize the mapping with the id of last column as the "garbage collection" entry for reduce ops
         cell_token_col_ids_fill_val = np.iinfo(np.uint16).max
-        t_cell_token_col_ids = np.full((batch_size, num_rows, max_seq_len), dtype=int, fill_value=cell_token_col_ids_fill_val)
+        t_cell_token_col_ids = np.full((batch_size, row_num, max_seq_len), dtype=int, fill_value=cell_token_col_ids_fill_val)
 
         for idx, t in enumerate(tables):
             for row_id, row_inst in enumerate(t):
@@ -232,7 +219,7 @@ class InputFormatter(object):
                 t_cell_token_col_ids[idx, row_id, :len(row_cell_token_col_ids)] = row_cell_token_col_ids
 
         max_col_num = max(t_row_col_nums)
-        t_table_mask = np.zeros((batch_size, num_rows, max_col_num), dtype=int)
+        t_table_mask = np.zeros((batch_size, row_num, max_col_num), dtype=int)
         t_global_col_idx = 0
 
         for idx, t in enumerate(tables):
@@ -252,3 +239,171 @@ class InputFormatter(object):
         }
 
         return t_tensor_dict
+
+
+class GitTablesDataset(Dataset):
+    def __init__(self, table_dir, table_roster, read_csv=False):
+        super().__init__()
+
+        self.table_dir = table_dir
+        self.table_roster = table_roster
+        self.read_csv = read_csv
+        self.X = self._load_tables()
+
+    def __len__(self):
+        return len(self.X)
+
+    def __getitem__(self, idx):
+        return self.X[idx]
+
+    def _load_tables(self):
+        print("Start Loading GitTables...")
+        X = []
+        with open(self.table_roster, "r") as f:
+            table_names = f.readlines()
+
+            for tn in table_names:
+                table_path = os.path.join(self.table_dir, tn.rstrip())
+                if self.read_csv:
+                    table = pd.read_csv(table_path, sep=",", lineterminator="\n")
+                else:
+                    table = pq.read_table(table_path).to_pandas()
+                
+                table = table.select_dtypes(include="object") # only consider textual columns
+                if table.empty: continue
+
+                X.append(table)
+
+        print("Finish Loading GitTables...")
+        return X
+
+
+class PretrainingDatasetWrapper(Dataset):
+    def __init__(self, tbl_ds, num_rows=3):
+       super().__init__()
+
+       self.tbl_ds = tbl_ds
+       self.input_formatter = InputFormatter(BertTokenizer.from_pretrained("bert-base-uncased"), num_rows)
+    
+    def __len__(self):
+        return len(self.tbl_ds)
+
+    def __getitem__(self, idx):  
+        table = self.tbl_ds[idx]
+        t1_input, t2_input = self.input_formatter.generate_input_pairs(table, idx)
+
+        return t1_input, t2_input
+
+
+class TestDatasetWrapper(Dataset):
+    def __init__(self, tbl_ds, num_rows=3):
+       super().__init__()
+
+       self.tbl_ds = tbl_ds
+       self.input_formatter = InputFormatter(BertTokenizer.from_pretrained("bert-base-uncased"), num_rows)
+    
+    def __len__(self):
+        return len(self.tbl_ds)
+
+    def __getitem__(self, idx):  
+        table = self.tbl_ds[idx]
+        t_input = self.input_formatter.generate_instance_input(table)
+
+        return t_input
+
+
+def collate(table_pairs, row_num=5): # list of tuples (t1, t2)
+    batch_size = len(table_pairs)
+    max_seq_len = 0
+
+    for t1, t2 in table_pairs:
+        # assert t1[1]["header"] == t2[2]["header"]
+        t1_local_max = max(len(row["token_ids"]) for row in t1)
+        t2_local_max = max(len(row["token_ids"]) for row in t2)
+        max_seq_len = max(max_seq_len, t1_local_max, t2_local_max)
+    # print("Max sequence length: ", max_seq_len)
+
+    t1_input_ids = np.zeros((batch_size, row_num, max_seq_len), dtype=np.int64)
+    t2_input_ids = np.zeros((batch_size, row_num, max_seq_len), dtype=np.int64)
+    t1_seq_mask = np.zeros((batch_size, row_num, max_seq_len), dtype=np.float32)
+    t2_seq_mask = np.zeros((batch_size, row_num, max_seq_len), dtype=np.float32)
+    t1_segment_ids = np.zeros((batch_size, row_num, max_seq_len), dtype=np.int64)
+    t2_segment_ids = np.zeros((batch_size, row_num, max_seq_len), dtype=np.int64)
+    t1_row_col_nums = []
+    t2_row_col_nums = []
+
+    # we initialize the mapping with the id of last column as the "garbage collection" entry for reduce ops
+    cell_token_col_ids_fill_val = np.iinfo(np.uint16).max
+    t1_cell_token_col_ids = np.full((batch_size, row_num, max_seq_len), dtype=int, fill_value=cell_token_col_ids_fill_val)
+    t2_cell_token_col_ids = np.full((batch_size, row_num, max_seq_len), dtype=int, fill_value=cell_token_col_ids_fill_val)
+
+    for idx, (t1, t2) in enumerate(table_pairs):
+        for row_id, row_inst in enumerate(t1):
+            bert_input_seq_len = len(row_inst["token_ids"])
+            t1_input_ids[idx, row_id, :bert_input_seq_len] = row_inst["token_ids"]
+            t1_seq_mask[idx, row_id, :bert_input_seq_len] = 1
+            t1_segment_ids[idx, row_id, :bert_input_seq_len] = 1
+
+            row_cell_token_col_ids = np.array(row_inst["cell_token_col_ids"])
+            try:
+                cur_col_num = row_cell_token_col_ids[row_cell_token_col_ids != cell_token_col_ids_fill_val].max() + 1
+            except ValueError:
+                print(row_cell_token_col_ids)
+                raise ValueError
+            t1_row_col_nums.append(cur_col_num)
+            t1_cell_token_col_ids[idx, row_id, :len(row_cell_token_col_ids)] = row_cell_token_col_ids
+        
+        for row_id, row_inst in enumerate(t2):
+            bert_input_seq_len = len(row_inst["token_ids"])
+            t2_input_ids[idx, row_id, :bert_input_seq_len] = row_inst["token_ids"]
+            t2_seq_mask[idx, row_id, :bert_input_seq_len] = 1
+            t2_segment_ids[idx, row_id, :bert_input_seq_len] = 1
+
+            row_cell_token_col_ids = np.array(row_inst["cell_token_col_ids"])
+            try:
+                cur_col_num = row_cell_token_col_ids[row_cell_token_col_ids != cell_token_col_ids_fill_val].max() + 1
+            except ValueError:
+                print(row_cell_token_col_ids)
+                raise ValueError
+            t2_row_col_nums.append(cur_col_num)
+            t2_cell_token_col_ids[idx, row_id, :len(row_cell_token_col_ids)] = row_cell_token_col_ids
+
+    t1_max_col_num = max(t1_row_col_nums)
+    t2_max_col_num = max(t2_row_col_nums)
+    max_col_num = max(t1_max_col_num, t2_max_col_num)
+    # print("Maximum column number: ", max_col_num)
+    
+    t1_table_mask = np.zeros((batch_size, row_num, max_col_num), dtype=int)
+    t2_table_mask = np.zeros((batch_size, row_num, max_col_num), dtype=int)
+    t1_global_col_idx, t2_global_col_idx = 0, 0
+
+    for idx, (t1, t2) in enumerate(table_pairs):
+        for row_id, _ in enumerate(t1):
+            col_num = t1_row_col_nums[t1_global_col_idx]
+            t1_table_mask[idx, row_id, :col_num] = 1
+            t1_global_col_idx += 1
+        for row_id, _ in enumerate(t2):
+            col_num = t2_row_col_nums[t2_global_col_idx]
+            t2_table_mask[idx, row_id, :col_num] = 1
+            t2_global_col_idx += 1
+
+    t1_cell_token_col_ids[t1_cell_token_col_ids == cell_token_col_ids_fill_val] = t1_max_col_num
+    t2_cell_token_col_ids[t2_cell_token_col_ids == cell_token_col_ids_fill_val] = t2_max_col_num
+
+    t1_tensor_dict = {
+        "input_ids": torch.tensor(t1_input_ids, dtype=torch.long),
+        "segment_ids": torch.tensor(t1_segment_ids, dtype=torch.long),
+        "cell_token_col_ids": torch.tensor(t1_cell_token_col_ids, dtype=torch.long),
+        "sequence_mask": torch.tensor(t1_seq_mask, dtype=torch.float32),
+        "table_mask": torch.tensor(t1_table_mask, dtype=torch.float32)
+    }
+
+    t2_tensor_dict = {
+        "input_ids": torch.tensor(t2_input_ids, dtype=torch.long),
+        "segment_ids": torch.tensor(t2_segment_ids, dtype=torch.long),
+        "cell_token_col_ids": torch.tensor(t2_cell_token_col_ids, dtype=torch.long),
+        "sequence_mask": torch.tensor(t2_seq_mask, dtype=torch.float32),
+        "table_mask": torch.tensor(t2_table_mask, dtype=torch.float32)
+    }
+
+    return (t1_tensor_dict, t2_tensor_dict)

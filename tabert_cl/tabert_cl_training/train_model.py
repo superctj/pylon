@@ -9,8 +9,8 @@ from pytorch_lightning.loggers import WandbLogger
 # from torch.multiprocessing import cpu_count
 from torch.utils.data import DataLoader
 
+from input_prep import GitTablesDataset, PretrainingDatasetWrapper, collate
 from model import ContrastiveLoss, SimTableCLR
-from dataset import GitTablesDataset, PretrainingDatasetWrapper, collate
 # from dataset_only_text import GitTablesDataset, PretrainingDatasetWrapper, collate
 
 
