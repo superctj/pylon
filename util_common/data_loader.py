@@ -79,8 +79,17 @@ class PylonCSVDataLoader(CSVDataLoader):
         table = pd.read_csv(
             table_path, delimiter=",", lineterminator="\n", on_bad_lines="skip", **kwargs) # lineterminator="\n" is crucial see https://stackoverflow.com/questions/33998740/error-in-reading-a-csv-file-in-pandascparsererror-error-tokenizing-data-c-err
         
+        # Select only textual columns
+        table = table.select_dtypes(include="object")
         if drop_nan:
-            table.dropna(axis=1, how="all", inplace=True) # Drop empty columns
-            table.dropna(axis=0, how="any", inplace=True) # Drop rows with missing values
+            # Drop empty columns
+            table.dropna(axis="columns", how="all", inplace=True)
+            # Drop rows with missing values
+            table.dropna(axis="index", how="any", inplace=True)
+            
+            if table.shape[1] < 1:
+                print(f"Table has no column left...")
+            if table.shape[0] < 3:
+                print(f"Table has fewer than 3 rows...")
 
         return table
