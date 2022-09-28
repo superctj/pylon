@@ -1,12 +1,14 @@
 import argparse
 import os
 import sys
+# Add project root directory to Python dependency search paths
+sys.path.append(os.path.abspath(os.path.join(os.getcwd(), os.pardir)))
+# Add TaBERT training directory to Python dependency search paths
+sys.path.append(os.path.join(os.getcwd(), "tabert_cl_training"))
 
 from d3l_extension import PylonTabertEmbeddingIndex, QueryEngine
 from d3l.utils.functions import pickle_python_object, unpickle_python_object
 
-# Add project root directory to Python dependency search paths
-sys.path.append(os.path.abspath(os.path.join(os.getcwd(), os.pardir)))
 from util import topk_search_and_eval
 from util_common.data_loader import PylonCSVDataLoader
 from util_common.logging import create_new_directory, custom_logger, log_args_and_metrics
