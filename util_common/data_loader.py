@@ -80,11 +80,11 @@ class PylonCSVDataLoader(CSVDataLoader):
             table_path, delimiter=",", lineterminator="\n", on_bad_lines="skip", **kwargs) # lineterminator="\n" is crucial see https://stackoverflow.com/questions/33998740/error-in-reading-a-csv-file-in-pandascparsererror-error-tokenizing-data-c-err
         
         # Select only textual columns
-        table = table.select_dtypes(include="object")
+        # table = table.select_dtypes(include="object")
         if drop_nan:
             # Drop empty columns
             table.dropna(axis="columns", how="all", inplace=True)
-            # Drop rows with missing values
+            # Drop rows with any missing value
             table.dropna(axis="index", how="any", inplace=True)
             
             if table.shape[1] < 1:
