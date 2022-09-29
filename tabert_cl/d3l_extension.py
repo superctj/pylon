@@ -435,7 +435,10 @@ class QueryEngine():
             # Column scores are not aggregated when performing table queries.
             if i < tabert_column_embeddings.shape[0]:
                 column_results = self.column_query(
-                    column=table[column], clr_embedding=tabert_column_embeddings[i], aggregator=None, k=None # None, k
+                    column=table[column],
+                    tabert_embedding=tabert_column_embeddings[i],
+                    aggregator=None,
+                    k=None # None, k
                 )
 
                 score_distributions[column] = np.sort(
