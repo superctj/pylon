@@ -1,5 +1,6 @@
 import os
 
+from pprint import pprint
 from typing import Dict, List, Tuple
 
 import numpy as np
@@ -45,10 +46,10 @@ class InputFormatter(object):
         return table.sample(n=num_rows) if table.shape[0] > num_rows else table
     
     def _tokenize_table(self, table: pd.DataFrame) -> Tuple[List[str], List[Dict]]:
-        # tokenize rows
         header = list(table.columns)
         tokenized_data = []
 
+        # Tokenize rows
         for i in range(table.shape[0]):
             tokenized_row = {}
             for col_name in header:
@@ -134,6 +135,8 @@ class InputFormatter(object):
         
         # It is possible that the first cell is too long and cannot fit into `row_token_max_len` and we need to discard this table
         if len(row_input_tokens) == 0:
+            pprint(f"Header: {header}")
+            pprint(f"Row: {row}")
             raise TableTooLongError()
 
         if row_input_tokens[-1] == COL_DELIMITER:
