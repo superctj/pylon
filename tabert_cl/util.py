@@ -1,13 +1,40 @@
+import argparse
 import os
 
 from typing import Tuple
 
 from d3l_extension import QueryEngine
+from d3l.utils.functions import pickle_python_object, unpickle_python_object
 from tqdm import tqdm
 
+from d3l_extension import PylonTabertEmbeddingIndex
 from util_common.data_loader import CSVDataLoader
-from util_common.logging import custom_logger, log_query_and_ground_truth
+from util_common.pylon_logging import custom_logger, log_query_and_ground_truth
 from util_common.query import aggregate_func, eval_search_results
+
+
+def create_or_load_index(dataloader: CSVDataLoader, args: argparse.Namespace) -> PylonTabertEmbeddingIndex:
+    ckpt_name = args.ckpt_path.split("/")[-1][:-5]
+    index_name = f"{ckpt_name}_sample_{args.num_samples}_lsh_{args.lsh_threshold}"
+    index_path = os.path.join(args.index_dir, f"{index_name}.lsh")
+
+    if os.path.exists(index_path):
+        embedding_index = unpickle_python_object(index_path)
+        print(f"{index_name} Embedding Index: LOADED!")
+    else:
+        print(f"{index_name} Embedding Index: STARTED!")
+        
+        embedding_index = PylonTabertEmbeddingIndex(
+            ckpt_path=args.ckpt_path,
+            dataloader=dataloader,
+            embedding_dim=args.embedding_dim,
+            num_samples=args.num_samples,
+            index_similarity_threshold=args.lsh_threshold
+        )
+        pickle_python_object(embedding_index, index_path)
+        print(f"{index_name} Embedding Index: SAVED!")
+    
+    return embedding_index, index_name
 
 
 def topk_search_and_eval(query_engine: QueryEngine, dataloader: CSVDataLoader, output_dir: str, k: int) -> Tuple[float]:
@@ -19,6 +46,12 @@ def topk_search_and_eval(query_engine: QueryEngine, dataloader: CSVDataLoader, o
 
     for qt_name in tqdm(queries):
         query_table = dataloader.read_table(table_name=qt_name)
+        if query_table.empty:
+            print(f"Table *{qt_name}* is empty after preprocessing...")
+            print("Continue to the next table...")
+            print("=" * 80)
+            continue
+
         results = query_engine.table_query(table=query_table, aggregator=aggregate_func, k=k, verbose=False)
 
         # Log query and ground truth
