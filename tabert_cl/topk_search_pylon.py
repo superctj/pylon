@@ -11,7 +11,7 @@ from d3l.utils.functions import pickle_python_object, unpickle_python_object
 
 from util import topk_search_and_eval
 from util_common.data_loader import PylonCSVDataLoader
-from util_common.logging import create_new_directory, custom_logger, log_args_and_metrics
+from util_common.pylon_logging import create_new_directory, custom_logger, log_args_and_metrics
 
 
 def create_or_load_index(dataloader: PylonCSVDataLoader, args: argparse.Namespace) -> PylonTabertEmbeddingIndex:
