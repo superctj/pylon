@@ -6,7 +6,7 @@ from typing import List, Tuple
 from d3l.querying.query_engine import QueryEngine
 
 from util_common.data_loader import CSVDataLoader
-from util_common.logging import log_search_results
+from util_common.pylon_logging import log_search_results
 
 
 def aggregate_func(similarity_scores: List[float]) -> float:
