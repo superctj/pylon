@@ -175,17 +175,24 @@ class PylonTabertEmbeddingIndex(SimilarityIndex):
             seed=self.index_seed,
         )
 
+        num_indexed_tables = 0
         for table_name in tqdm(self.dataloader.get_table_names()):
             # print(table_name)
             try:
                 table_data = self.dataloader.read_table(table_name)
+
+                if table_data.empty:
+                    print(f"Table *{table_name}* is empty after preprocessing...")
+                    print("Continue to the next table...")
+                    print("=" * 80)
+                    continue
             except:
-                print("=" * 50)
                 print(f"Table *{table_name}* cannot be read correctly...")
                 print("Continue to the next table...")
                 print("=" * 50)
                 continue
 
+            num_indexed_tables += 1
             column_signatures = self.transformer.transform(table_data)
             column_names = table_data.columns
             # print(column_signatures.shape)
@@ -194,6 +201,9 @@ class PylonTabertEmbeddingIndex(SimilarityIndex):
             for i in range(column_signatures.shape[0]):
                 lsh_index.add(input_id=str(table_name) + "!" + str(column_names[i]), input_set=column_signatures[i])
 
+        print(f"Total number of tables: {len(self.dataloader.get_table_names())}")
+        print(f"Number of tables indexed: {num_indexed_tables}")
+        print("=" * 80)
         return lsh_index
 
     def query(
