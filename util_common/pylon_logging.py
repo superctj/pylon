@@ -47,10 +47,11 @@ def log_search_results(logger: logging.Logger, candidate_table_name: str, score:
     logger.info("-" * 50)
 
 
-def log_args_and_metrics(logger: logging.Logger, args: argparse.Namespace, metrics: Tuple[int, float, float]):
+def log_args_and_metrics(logger: logging.Logger, args: argparse.Namespace, metrics: Tuple[int, float, float, float]):
     logger.info(args)
     logger.info("=" * 50)
     logger.info(f"{args.dataset_name} top-{args.top_k} search")
     logger.info(f"  Number of queries: {metrics[0]}")
     logger.info(f"  Precision: {metrics[1] : .2f}")
     logger.info(f"  Recall: {metrics[2] : .2f}")
+    logger.info(f"  Lookup time: {metrics[3] : .2f} s/query")
