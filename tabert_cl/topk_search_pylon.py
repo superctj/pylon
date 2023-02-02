@@ -6,36 +6,10 @@ sys.path.append(os.path.abspath(os.path.join(os.getcwd(), os.pardir)))
 # Add TaBERT training directory to Python dependency search paths
 sys.path.append(os.path.join(os.getcwd(), "tabert_cl_training"))
 
-from d3l_extension import PylonTabertEmbeddingIndex, QueryEngine
-from d3l.utils.functions import pickle_python_object, unpickle_python_object
-
-from util import topk_search_and_eval
+from d3l_extension import QueryEngine
+from util import create_or_load_index, topk_search_and_eval
 from util_common.data_loader import PylonCSVDataLoader
 from util_common.pylon_logging import create_new_directory, custom_logger, log_args_and_metrics
-
-
-def create_or_load_index(dataloader: PylonCSVDataLoader, args: argparse.Namespace) -> PylonTabertEmbeddingIndex:
-    ckpt_name = args.ckpt_path.split("/")[-1][:-5]
-    index_name = f"{ckpt_name}_sample_{args.num_samples}_lsh_{args.lsh_threshold}"
-    index_path = os.path.join(args.index_dir, f"{index_name}.lsh")
-
-    if os.path.exists(index_path):
-        embedding_index = unpickle_python_object(index_path)
-        print(f"{index_name} Embedding Index: LOADED!")
-    else:
-        print(f"{index_name} Embedding Index: STARTED!")
-        
-        embedding_index = PylonTabertEmbeddingIndex(
-            ckpt_path=args.ckpt_path,
-            dataloader=dataloader,
-            embedding_dim=args.embedding_dim,
-            num_samples=args.num_samples,
-            index_similarity_threshold=args.lsh_threshold
-        )
-        pickle_python_object(embedding_index, index_path)
-        print(f"{index_name} Embedding Index: SAVED!")
-    
-    return embedding_index, index_name
 
 
 def main(args):

@@ -13,7 +13,7 @@ threshold=0.7
 for k in $(seq 10 40 330)
 do
     python topk_search_tus.py \
-    --dataset_name=dataset_name \
+    --dataset_name=${dataset_name} \
     --dataset_dir="/ssd/congtj/data/table-union-search-benchmark/table_csvs/${version}_benchmark/" \
     --query_file="/ssd/congtj/data/table-union-search-benchmark/table_csvs/${version}_groundtruth/recall_groundtruth.csv" \
     --ground_truth_file="/ssd/congtj/data/table-union-search-benchmark/${version}_groundtruth.pkl" \
