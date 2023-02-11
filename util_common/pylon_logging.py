@@ -47,6 +47,15 @@ def log_search_results(logger: logging.Logger, candidate_table_name: str, score:
     logger.info("-" * 50)
 
 
+def log_extended_search_results(logger: logging.Logger, column_search_results: List[Tuple]):
+    # column_search_results: [((<query_column_name>, <related_column_name>), [column_level_scores])]
+    for res in column_search_results:
+        logger.info(f"Query column: {res[0][0]}")
+        logger.info(f"Candidate column: {res[0][1]}")
+        logger.info(f"Scores: {res[1]}")
+        logger.info("=" * 50)
+
+
 def log_args_and_metrics(logger: logging.Logger, args: argparse.Namespace, metrics: Tuple[int, float, float, float]):
     logger.info(args)
     logger.info("=" * 50)

@@ -12,7 +12,7 @@ from d3l.indexing.similarity_indexes import NameIndex, SimilarityIndex
 from tqdm import tqdm
 
 from util_common.data_loader import CSVDataLoader
-from util_common.pylon_logging import custom_logger, log_query_and_ground_truth, log_search_results
+from util_common.pylon_logging import custom_logger, log_query_and_ground_truth, log_search_results, log_extended_search_results
 
 
 def aggregate_func(similarity_scores: List[float]) -> float:
@@ -255,19 +255,23 @@ class QueryEngine:
         return table_results
 
 
-def eval_search_results(results: List[Tuple[str, float]], ground_truth: List[str], logger: logging.Logger) -> int:
+def eval_search_results(results: List[Tuple[str, float]], ground_truth: List[str], logger: logging.Logger, verbose=False, extended_results=None) -> int:
     num_corr = 0
 
-    for res in results:
+    for i, res in enumerate(results):
         if res[0] in ground_truth:
             num_corr += 1
 
         log_search_results(logger, res[0], res[1])
-    
+        
+        if verbose: # each item in extended_results has the format (<table_name>, [((<query_column_name>, <related_column_name>), [column_level_scores])])
+            assert(extended_results[i][0] == res[0])
+            log_extended_search_results(logger, extended_results[i][1])
+
     return num_corr
 
 
-def topk_search_and_eval(query_engine: QueryEngine, dataloader: CSVDataLoader, output_dir: str, k: int) -> Tuple:
+def topk_search_and_eval(query_engine: QueryEngine, dataloader: CSVDataLoader, output_dir: str, k: int, verbose=False) -> Tuple:
     queries = dataloader.get_queries()
     ground_truth = dataloader.get_ground_truth()
 
@@ -285,8 +289,12 @@ def topk_search_and_eval(query_engine: QueryEngine, dataloader: CSVDataLoader, o
 
         # LSH lookup and timing
         start_time = time.time()
-        results = query_engine.table_query(
-            table=query_table, aggregator=aggregate_func, k=k, verbose=False)
+        if not verbose:
+            results = query_engine.table_query(
+                table=query_table, aggregator=aggregate_func, k=k, verbose=verbose)
+        else:
+            results, extended_results = query_engine.table_query(
+                table=query_table, aggregator=aggregate_func, k=k, verbose=verbose)
         end_time = time.time()
         total_lookup_time += (end_time - start_time)
 
@@ -302,7 +310,10 @@ def topk_search_and_eval(query_engine: QueryEngine, dataloader: CSVDataLoader, o
         log_query_and_ground_truth(logger, qt_name, query_ground_truth)
 
         # Evaluate and log top-k search results
-        num_corr = eval_search_results(results, query_ground_truth, logger)
+        if not verbose:
+            num_corr = eval_search_results(results, query_ground_truth, logger)
+        else:
+            num_corr = eval_search_results(results, query_ground_truth, logger, verbose, extended_results)
         precision.append(num_corr / k)
         recall.append(num_corr / len(query_ground_truth))
     
