@@ -21,6 +21,10 @@ class CSVDataLoader(ABC):
         pass
 
     @abstractmethod
+    def _read_related_columns(rel_file: str) -> Dict:
+        pass
+
+    @abstractmethod
     def get_table_names(self) -> List[str]:
         pass
 
@@ -30,6 +34,10 @@ class CSVDataLoader(ABC):
 
     @abstractmethod
     def get_ground_truth(self) -> List[str]:
+        pass
+
+    @abstractmethod
+    def get_related_columns(self) -> Dict:
         pass
 
     @abstractmethod
@@ -154,11 +162,12 @@ class TUSCSVDataLoader(CSVDataLoader):
 
 
 class SantosLabeledDataLoader(CSVDataLoader):
-    def __init__(self, dataset_dir: str, query_dir: str, ground_truth_file: str):
+    def __init__(self, dataset_dir: str, query_dir: str, ground_truth_file: str, rel_file: str):
         self.dataset_dir = dataset_dir
         self.table_names = self._read_table_names()
         self.queries = self._read_queries(query_dir)
         self.ground_truth = self._read_ground_truth(ground_truth_file)
+        self.related_columns = self._read_related_columns(rel_file)
 
     def _read_table_names(self) -> List[str]:
         table_names = [
@@ -191,6 +200,12 @@ class SantosLabeledDataLoader(CSVDataLoader):
         
         return ground_truth
     
+    def _read_related_columns(self, rel_file: str) -> Dict:
+        with open(rel_file, "rb") as rel_file:
+            rel_cols = pickle.load(rel_file)
+        
+        return rel_cols
+    
     def get_table_names(self) -> List[str]:
         return self.table_names
     
@@ -199,8 +214,11 @@ class SantosLabeledDataLoader(CSVDataLoader):
     
     def get_ground_truth(self) -> List[str]:
         return self.ground_truth
+
+    def get_related_columns(self) -> Dict:
+        return self.related_columns
     
-    def read_table(self, table_name: str, drop_nan: bool = True, **kwargs) -> pd.DataFrame:
+    def read_table(self, table_name: str, drop_nan: bool=True, **kwargs) -> pd.DataFrame:
         table_path = os.path.join(self.dataset_dir, f"{table_name}.csv")
         table = pd.read_csv(
             table_path, encoding="latin1", on_bad_lines="skip", **kwargs)
@@ -210,8 +228,8 @@ class SantosLabeledDataLoader(CSVDataLoader):
         if drop_nan:
             # Drop empty columns
             table.dropna(axis="columns", how="all", inplace=True)
-            # Drop rows with any missing value
-            table.dropna(axis="index", how="any", inplace=True)
+            # Drop empty rows
+            table.dropna(axis="index", how="all", inplace=True)
             
             if table.shape[1] < 1:
                 print(f"Table has no column left...")
