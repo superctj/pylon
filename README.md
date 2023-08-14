@@ -21,3 +21,6 @@ If you find our work useful or related to yours, please cite our paper with the 
   year         = {2023}
 }
 ```
+
+## What's the Tea? :tea:
+TLDR: One paper with the same idea as ours is published in VLDB 2023. The first author, she *was* a friend.
